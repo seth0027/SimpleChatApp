@@ -1,7 +1,10 @@
 package com.example.simplechatapp
 
+import com.google.firebase.database.IgnoreExtraProperties
+
+@IgnoreExtraProperties
 data class ChatMessage(
-    private val text: String,
-    private val name: String,
-    private val photoUrl: String?
+     val text: String?,
+     val name: String,
+     val photoUrl: String?
 )
