@@ -1,6 +1,12 @@
 package com.example.simplechatapp
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
 import android.text.Editable
@@ -12,6 +18,12 @@ import android.view.MenuItem
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.graphics.drawable.toBitmap
+import com.bumptech.glide.Glide
+import com.bumptech.glide.request.target.CustomTarget
+import com.bumptech.glide.request.transition.Transition
 import com.firebase.ui.auth.AuthUI
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.*
@@ -32,6 +44,7 @@ class MainActivity : AppCompatActivity() {
         const val RC_PHOTO_PICKER = 102
         const val TAG = "Inspection"
         const val CHAT_MSG_LENGTH_KEY = "chat_length"
+        const val CHANNEL_ID = "SimpleChatApp"
 
     }
 
@@ -88,6 +101,8 @@ class MainActivity : AppCompatActivity() {
             messagesDatabaseReference.push().setValue(chatMessage)
             messageEditText.setText("")
         }
+        //Create Notification Channel
+        createNotificationChannel()
         messageEditText.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {
 
@@ -193,7 +208,11 @@ class MainActivity : AppCompatActivity() {
                     if (snapshot.exists()) {
                         val chatMessage = snapshot.getValue(ChatMessage::class.java)
 
+
+
                         messageAdapter.add(chatMessage)
+
+                        notifyUsers(chatMessage)
                     }
                 }
 
@@ -203,6 +222,13 @@ class MainActivity : AppCompatActivity() {
 
                 override fun onChildRemoved(snapshot: DataSnapshot) {
 
+                    if (snapshot.exists()) {
+                        val chatMessage = snapshot.getValue(ChatMessage::class.java)
+
+
+
+                        messageAdapter.remove(chatMessage)
+                    }
                 }
 
                 override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {
@@ -214,6 +240,85 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             messagesDatabaseReference.addChildEventListener(childEventListener!!)
+        }
+    }
+
+    private fun notifyUsers(chatMessage: ChatMessage?) {
+
+        // Create an explicit intent for an Activity in your app
+        val intent = Intent(this, MainActivity::class.java).apply {
+
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, intent, 0)
+
+        val isPhoto = chatMessage!!.photoUrl != null
+
+
+        NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.googleg_standard_color_18)
+            .setContentTitle(chatMessage.name)
+
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT).setAutoCancel(true)
+            .setContentIntent(pendingIntent).let {
+                if (isPhoto) {
+                    lateinit var bitmap: Bitmap
+
+                    Glide.with(baseContext)
+                        .load(chatMessage.photoUrl)
+                        .into(object : CustomTarget<Drawable>() {
+                            override fun onResourceReady(
+                                resource: Drawable,
+                                transition: Transition<in Drawable>?
+                            ) {
+                                bitmap = resource.toBitmap()
+                                it.setStyle(NotificationCompat.BigPictureStyle().bigPicture(bitmap))
+                                showNotification(it, chatMessage)
+
+
+                            }
+
+                            override fun onLoadCleared(placeholder: Drawable?) {
+
+                            }
+
+                        })
+
+
+                } else
+                    it.setContentText(chatMessage.text)
+                showNotification(it, chatMessage)
+
+            }
+
+
+    }
+
+    private fun showNotification(it: NotificationCompat.Builder?, chatMessage: ChatMessage?) {
+
+        with(NotificationManagerCompat.from(this)) {
+            // notificationId is a unique int for each notification that you must define
+            //Getting hash code for unique Notification Id for particular chat name
+            notify(chatMessage!!.name.hashCode(), it!!.build())
+        }
+
+    }
+
+
+    private fun createNotificationChannel() {
+        // Create the NotificationChannel, but only on API 26+ because
+        // the NotificationChannel class is new and not in the support library
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "Messaging"
+            val descriptionText = "Just for Messages!"
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
+                description = descriptionText
+            }
+            // Register the channel with the system
+            val notificationManager: NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
         }
     }
 
